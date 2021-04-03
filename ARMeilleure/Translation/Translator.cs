@@ -36,6 +36,10 @@ namespace ARMeilleure.Translation
         private readonly AutoResetEvent _backgroundTranslatorEvent;
         private readonly ReaderWriterLock _backgroundTranslatorLock;
 
+        private readonly JitCache _jitCache;
+
+        private readonly DirectCallStubs _directCallStubs;
+
         private JumpTable _jumpTable;
         internal JumpTable JumpTable => _jumpTable;
         internal EntryTable<uint> CountTable { get; }
@@ -60,9 +64,9 @@ namespace ARMeilleure.Translation
 
             CountTable = new EntryTable<uint>();
 
-            JitCache.Initialize(allocator);
+            _jitCache = new JitCache(allocator);
 
-            DirectCallStubs.InitializeStubs();
+            _directCallStubs = new DirectCallStubs(_jitCache);
         }
 
         private void TranslateStackedSubs()
@@ -115,13 +119,13 @@ namespace ARMeilleure.Translation
                 IsReadyForTranslation.WaitOne();
 
                 Debug.Assert(_jumpTable == null);
-                _jumpTable = new JumpTable(_allocator);
+                _jumpTable = new JumpTable(_allocator, _directCallStubs);
 
                 if (Ptc.State == PtcState.Enabled)
                 {
                     Debug.Assert(_funcs.Count == 0);
-                    Ptc.LoadTranslations(_funcs, _memory, _jumpTable, CountTable);
-                    Ptc.MakeAndSaveTranslations(_funcs, _memory, _jumpTable, CountTable);
+                    Ptc.LoadTranslations(_funcs, _memory, _jumpTable, CountTable, _jitCache, _directCallStubs);
+                    Ptc.MakeAndSaveTranslations(_funcs, _memory, _jumpTable, CountTable, this, _directCallStubs);
                 }
 
                 PtcProfiler.Start();
@@ -204,7 +208,7 @@ namespace ARMeilleure.Translation
 
                 if (getFunc != func)
                 {
-                    JitCache.Unmap(func.FuncPtr);
+                    _jitCache.Unmap(func.FuncPtr);
                     func = getFunc;
                 }
 
@@ -217,7 +221,7 @@ namespace ARMeilleure.Translation
             return func;
         }
 
-        internal static TranslatedFunction Translate(
+        internal TranslatedFunction Translate(
             IMemoryManager memory,
             JumpTable jumpTable,
             EntryTable<uint> countTable,
@@ -271,7 +275,7 @@ namespace ARMeilleure.Translation
 
             if (Ptc.State == PtcState.Disabled)
             {
-                func = Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, options);
+                func = Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, options, _jitCache);
 
                 ResetPool(highCq ? 1 : 0);
             }
@@ -279,7 +283,7 @@ namespace ARMeilleure.Translation
             {
                 using PtcInfo ptcInfo = new PtcInfo();
 
-                func = Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, options, ptcInfo);
+                func = Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, options, _jitCache, ptcInfo);
 
                 ResetPool(highCq ? 1 : 0);
 
@@ -469,7 +473,7 @@ namespace ARMeilleure.Translation
 
             foreach (var func in _funcs.Values)
             {
-                JitCache.Unmap(func.FuncPtr);
+                _jitCache.Unmap(func.FuncPtr);
 
                 func.CallCounter?.Dispose();
             }
@@ -478,7 +482,7 @@ namespace ARMeilleure.Translation
 
             while (_oldFuncs.TryDequeue(out var kv))
             {
-                JitCache.Unmap(kv.Value.FuncPtr);
+                _jitCache.Unmap(kv.Value.FuncPtr);
 
                 kv.Value.CallCounter?.Dispose();
             }

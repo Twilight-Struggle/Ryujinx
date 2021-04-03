@@ -47,6 +47,8 @@ namespace ARMeilleure.Translation.Cache
         private readonly ReservedRegion _jumpRegion;
         private readonly ReservedRegion _dynamicRegion;
 
+        private readonly DirectCallStubs _directCallStubs;
+
         public IntPtr JumpPointer => _jumpRegion.Pointer;
         public IntPtr DynamicPointer => _dynamicRegion.Pointer;
 
@@ -57,10 +59,11 @@ namespace ARMeilleure.Translation.Cache
         public ConcurrentDictionary<ulong, List<int>> Dependants { get; } // TODO: Attach to TranslatedFunction or a wrapper class.
         public ConcurrentDictionary<ulong, List<int>> Owners { get; }
 
-        public JumpTable(IJitMemoryAllocator allocator)
+        public JumpTable(IJitMemoryAllocator allocator, DirectCallStubs directCallStubs)
         {
             _jumpRegion = new ReservedRegion(allocator, JumpTableByteSize);
             _dynamicRegion = new ReservedRegion(allocator, DynamicTableByteSize);
+            _directCallStubs = directCallStubs;
 
             Table = new JumpTableEntryAllocator();
             DynTable = new JumpTableEntryAllocator();
@@ -126,7 +129,7 @@ namespace ARMeilleure.Translation.Cache
 
             // Is the address we have already registered? If so, put the function address in the jump table.
             // If not, it will point to the direct call stub.
-            long value = DirectCallStubs.DirectCallStub(isJump).ToInt64();
+            long value = _directCallStubs.DirectCallStub(isJump).ToInt64();
             if (Targets.TryGetValue(address, out TranslatedFunction func))
             {
                 value = func.FuncPtr.ToInt64();
@@ -169,7 +172,7 @@ namespace ARMeilleure.Translation.Cache
 
             // Initialize all host function pointers to the indirect call stub.
             IntPtr addr = GetEntryAddressDynamicTable(entry);
-            long stubPtr = DirectCallStubs.IndirectCallStub(isJump).ToInt64();
+            long stubPtr = _directCallStubs.IndirectCallStub(isJump).ToInt64();
 
             for (int i = 0; i < DynamicTableElems; i++)
             {

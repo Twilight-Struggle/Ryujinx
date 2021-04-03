@@ -1,6 +1,7 @@
 ﻿using ARMeilleure.Instructions;
 using ARMeilleure.IntermediateRepresentation;
 using ARMeilleure.State;
+using ARMeilleure.Translation.Cache;
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -9,26 +10,24 @@ using static ARMeilleure.IntermediateRepresentation.OperandHelper;
 
 namespace ARMeilleure.Translation
 {
-    static class DirectCallStubs
+    class DirectCallStubs
     {
         private delegate long GuestFunction(IntPtr nativeContextPtr);
 
-        private static IntPtr _directCallStubPtr;
-        private static IntPtr _directTailCallStubPtr;
-        private static IntPtr _indirectCallStubPtr;
-        private static IntPtr _indirectTailCallStubPtr;
+        private IntPtr _directCallStubPtr;
+        private IntPtr _directTailCallStubPtr;
+        private IntPtr _indirectCallStubPtr;
+        private IntPtr _indirectTailCallStubPtr;
+
+        private JitCache _jitCache;
 
         private static readonly object _lock = new object();
-        private static bool _initialized;
 
-        public static void InitializeStubs()
+        public DirectCallStubs(JitCache jitCache)
         {
-            if (_initialized) return;
-
+            _jitCache = jitCache;
             lock (_lock)
             {
-                if (_initialized) return;
-
                 Translator.PreparePool();
 
                 _directCallStubPtr       = Marshal.GetFunctionPointerForDelegate<GuestFunction>(GenerateDirectCallStub(false));
@@ -39,22 +38,16 @@ namespace ARMeilleure.Translation
                 Translator.ResetPool();
 
                 Translator.DisposePools();
-
-                _initialized = true;
             }
         }
 
-        public static IntPtr DirectCallStub(bool tailCall)
+        public IntPtr DirectCallStub(bool tailCall)
         {
-            Debug.Assert(_initialized);
-
             return tailCall ? _directTailCallStubPtr : _directCallStubPtr;
         }
 
-        public static IntPtr IndirectCallStub(bool tailCall)
+        public IntPtr IndirectCallStub(bool tailCall)
         {
-            Debug.Assert(_initialized);
-
             return tailCall ? _indirectTailCallStubPtr : _indirectCallStubPtr;
         }
 
@@ -75,7 +68,7 @@ namespace ARMeilleure.Translation
         /// Takes a NativeContext like a translated guest function, and extracts the target address from the NativeContext.
         /// When the target function is compiled in highCq, all table entries are updated to point to that function instead of this stub by the translator.
         /// </summary>
-        private static GuestFunction GenerateDirectCallStub(bool tailCall)
+        private GuestFunction GenerateDirectCallStub(bool tailCall)
         {
             EmitterContext context = new EmitterContext();
 
@@ -90,7 +83,7 @@ namespace ARMeilleure.Translation
 
             OperandType[] argTypes = new OperandType[] { OperandType.I64 };
 
-            return Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, CompilerOptions.HighCq);
+            return Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, CompilerOptions.HighCq, _jitCache);
         }
 
         /// <summary>
@@ -99,7 +92,7 @@ namespace ARMeilleure.Translation
         /// Takes a NativeContext like a translated guest function, and extracts the target indirect table entry from the NativeContext.
         /// If the function we find is highCq, the entry in the table is updated to point to that function rather than this stub.
         /// </summary>
-        private static GuestFunction GenerateIndirectCallStub(bool tailCall)
+        private GuestFunction GenerateIndirectCallStub(bool tailCall)
         {
             EmitterContext context = new EmitterContext();
 
@@ -119,7 +112,7 @@ namespace ARMeilleure.Translation
 
             OperandType[] argTypes = new OperandType[] { OperandType.I64 };
 
-            return Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, CompilerOptions.HighCq);
+            return Compiler.Compile<GuestFunction>(cfg, argTypes, OperandType.I64, CompilerOptions.HighCq, _jitCache);
         }
     }
 }

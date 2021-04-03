@@ -181,7 +181,7 @@ namespace ARMeilleure.Translation.PTC
             Owners.TrimExcess();
         }
 
-        public void WriteJumpTable(JumpTable jumpTable, ConcurrentDictionary<ulong, TranslatedFunction> funcs)
+        public void WriteJumpTable(JumpTable jumpTable, ConcurrentDictionary<ulong, TranslatedFunction> funcs, DirectCallStubs directCallStubs)
         {
             // Writes internal state to jump table in-memory, after PtcJumpTable was deserialized.
 
@@ -194,11 +194,11 @@ namespace ARMeilleure.Translation.PTC
 
                 if (directHostAddress == DirectHostAddress.CallStub)
                 {
-                    hostAddress = DirectCallStubs.DirectCallStub(false).ToInt64();
+                    hostAddress = directCallStubs.DirectCallStub(false).ToInt64();
                 }
                 else if (directHostAddress == DirectHostAddress.TailCallStub)
                 {
-                    hostAddress = DirectCallStubs.DirectCallStub(true).ToInt64();
+                    hostAddress = directCallStubs.DirectCallStub(true).ToInt64();
                 }
                 else if (directHostAddress == DirectHostAddress.Host)
                 {
@@ -233,7 +233,7 @@ namespace ARMeilleure.Translation.PTC
             }
         }
 
-        public void WriteDynamicTable(JumpTable jumpTable)
+        public void WriteDynamicTable(JumpTable jumpTable, DirectCallStubs directCallStubs)
         {
             // Writes internal state to jump table in-memory, after PtcJumpTable was deserialized.
 
@@ -251,11 +251,11 @@ namespace ARMeilleure.Translation.PTC
 
                 if (indirectHostAddress == IndirectHostAddress.CallStub)
                 {
-                    hostAddress = DirectCallStubs.IndirectCallStub(false).ToInt64();
+                    hostAddress = directCallStubs.IndirectCallStub(false).ToInt64();
                 }
                 else if (indirectHostAddress == IndirectHostAddress.TailCallStub)
                 {
-                    hostAddress = DirectCallStubs.IndirectCallStub(true).ToInt64();
+                    hostAddress = directCallStubs.IndirectCallStub(true).ToInt64();
                 }
                 else
                 {
@@ -274,7 +274,7 @@ namespace ARMeilleure.Translation.PTC
             }
         }
 
-        public void ReadJumpTable(JumpTable jumpTable)
+        public void ReadJumpTable(JumpTable jumpTable, DirectCallStubs directCallStubs)
         {
             // Reads in-memory jump table state and store internally for PtcJumpTable serialization.
 
@@ -291,11 +291,11 @@ namespace ARMeilleure.Translation.PTC
 
                 DirectHostAddress directHostAddress;
 
-                if (hostAddress == DirectCallStubs.DirectCallStub(false).ToInt64())
+                if (hostAddress == directCallStubs.DirectCallStub(false).ToInt64())
                 {
                     directHostAddress = DirectHostAddress.CallStub;
                 }
-                else if (hostAddress == DirectCallStubs.DirectCallStub(true).ToInt64())
+                else if (hostAddress == directCallStubs.DirectCallStub(true).ToInt64())
                 {
                     directHostAddress = DirectHostAddress.TailCallStub;
                 }
@@ -308,7 +308,7 @@ namespace ARMeilleure.Translation.PTC
             }
         }
 
-        public void ReadDynamicTable(JumpTable jumpTable)
+        public void ReadDynamicTable(JumpTable jumpTable, DirectCallStubs directCallStubs)
         {
             // Reads in-memory jump table state and store internally for PtcJumpTable serialization.
 
@@ -330,11 +330,11 @@ namespace ARMeilleure.Translation.PTC
 
                 IndirectHostAddress indirectHostAddress;
 
-                if (hostAddress == DirectCallStubs.IndirectCallStub(false).ToInt64())
+                if (hostAddress == directCallStubs.IndirectCallStub(false).ToInt64())
                 {
                     indirectHostAddress = IndirectHostAddress.CallStub;
                 }
-                else if (hostAddress == DirectCallStubs.IndirectCallStub(true).ToInt64())
+                else if (hostAddress == directCallStubs.IndirectCallStub(true).ToInt64())
                 {
                     indirectHostAddress = IndirectHostAddress.TailCallStub;
                 }

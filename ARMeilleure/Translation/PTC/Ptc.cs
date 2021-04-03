@@ -538,7 +538,9 @@ namespace ARMeilleure.Translation.PTC
             ConcurrentDictionary<ulong, TranslatedFunction> funcs,
             IMemoryManager memory,
             JumpTable jumpTable,
-            EntryTable<uint> countTable)
+            EntryTable<uint> countTable,
+            JitCache jitCache,
+            DirectCallStubs directCallStubs)
         {
             if (AreCarriersEmpty())
             {
@@ -604,7 +606,7 @@ namespace ARMeilleure.Translation.PTC
 
                     UnwindInfo unwindInfo = ReadUnwindInfo(unwindInfosReader);
 
-                    TranslatedFunction func = FastTranslate(code, callCounter, infoEntry.GuestSize, unwindInfo, infoEntry.HighCq);
+                    TranslatedFunction func = FastTranslate(code, callCounter, infoEntry.GuestSize, unwindInfo, infoEntry.HighCq, jitCache);
 
                     bool isAddressUnique = funcs.TryAdd(infoEntry.Address, func);
 
@@ -621,8 +623,8 @@ namespace ARMeilleure.Translation.PTC
 
             jumpTable.Initialize(PtcJumpTable, funcs);
 
-            PtcJumpTable.WriteJumpTable(jumpTable, funcs);
-            PtcJumpTable.WriteDynamicTable(jumpTable);
+            PtcJumpTable.WriteJumpTable(jumpTable, funcs, directCallStubs);
+            PtcJumpTable.WriteDynamicTable(jumpTable, directCallStubs);
 
             Logger.Info?.Print(LogClass.Ptc, $"{funcs.Count} translated functions loaded");
         }
@@ -744,11 +746,12 @@ namespace ARMeilleure.Translation.PTC
             Counter<uint> callCounter,
             ulong guestSize,
             UnwindInfo unwindInfo,
-            bool highCq)
+            bool highCq,
+            JitCache jitCache)
         {
             CompiledFunction cFunc = new CompiledFunction(code, unwindInfo);
 
-            IntPtr codePtr = JitCache.Map(cFunc);
+            IntPtr codePtr = jitCache.Map(cFunc);
 
             GuestFunction gFunc = Marshal.GetDelegateForFunctionPointer<GuestFunction>(codePtr);
 
@@ -791,7 +794,9 @@ namespace ARMeilleure.Translation.PTC
             ConcurrentDictionary<ulong, TranslatedFunction> funcs,
             IMemoryManager memory,
             JumpTable jumpTable,
-            EntryTable<uint> countTable)
+            EntryTable<uint> countTable,
+            Translator translator,
+            DirectCallStubs directCallStubs)
         {
             var profiledFuncsToTranslate = PtcProfiler.GetProfiledFuncsToTranslate(funcs);
 
@@ -833,7 +838,7 @@ namespace ARMeilleure.Translation.PTC
 
                     Debug.Assert(PtcProfiler.IsAddressInStaticCodeRange(address));
 
-                    TranslatedFunction func = Translator.Translate(memory, jumpTable, countTable, address, item.funcProfile.Mode, item.funcProfile.HighCq);
+                    TranslatedFunction func = translator.Translate(memory, jumpTable, countTable, address, item.funcProfile.Mode, item.funcProfile.HighCq);
 
                     bool isAddressUnique = funcs.TryAdd(address, func);
 
@@ -879,8 +884,8 @@ namespace ARMeilleure.Translation.PTC
 
             PtcJumpTable.Initialize(jumpTable);
 
-            PtcJumpTable.ReadJumpTable(jumpTable);
-            PtcJumpTable.ReadDynamicTable(jumpTable);
+            PtcJumpTable.ReadJumpTable(jumpTable, directCallStubs);
+            PtcJumpTable.ReadDynamicTable(jumpTable, directCallStubs);
 
             Thread preSaveThread = new Thread(PreSave);
             preSaveThread.IsBackground = true;
