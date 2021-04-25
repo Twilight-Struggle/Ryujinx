@@ -36,7 +36,7 @@ namespace ARMeilleure.Translation
         private readonly AutoResetEvent _backgroundTranslatorEvent;
         private readonly ReaderWriterLock _backgroundTranslatorLock;
 
-        private readonly JitCache _jitCache;
+        private JitCache _jitCache;
 
         private readonly DirectCallStubs _directCallStubs;
 
@@ -173,6 +173,8 @@ namespace ARMeilleure.Translation
                 _backgroundTranslatorEvent.Set();
 
                 ClearJitCache();
+                _jitCache.Dispose();
+                _jitCache = null;
 
                 DisposePools();
 
